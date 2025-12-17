@@ -1,0 +1,5 @@
+{
+  "name": "Three.js Matrix Code Scene (Standalone)",
+  "description": "An immersive 3D scene inspired by the digital rain effect from The Matrix. This is a standalone HTML file that runs directly in the browser, using Three.js and React from a CDN.",
+  "requestFramePermissions": []
+}

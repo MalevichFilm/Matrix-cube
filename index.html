@@ -1,0 +1,276 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Three.js Matrix Code Scene</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #111827; /* bg-gray-900 */
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+    <!-- Import Map for loading ES modules like React and Three.js -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "three": "https://esm.sh/three@0.165.0",
+        "three/examples/jsm/controls/OrbitControls.js": "https://esm.sh/three@0.165.0/examples/jsm/controls/OrbitControls.js"
+      }
+    }
+    </script>
+</head>
+<body>
+    <!-- The root element where the React app will be mounted -->
+    <div id="root"></div>
+
+    <!-- The entire application logic compiled into a single script -->
+    <script type="module">
+        import React from 'react';
+        import ReactDOM from 'react-dom/client';
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+        const { useState, useRef, useEffect, forwardRef, useImperativeHandle } = React;
+
+        // ----------------------------------------------------
+        // 1. Three.js Scene Component (from components/ThreeScene.tsx)
+        // ----------------------------------------------------
+        const ThreeScene = forwardRef(({ isGridVisible }, ref) => {
+            const mountRef = useRef(null);
+            const sceneElements = useRef({});
+
+            useImperativeHandle(ref, () => ({
+                resetCamera() {
+                    sceneElements.current.controls?.reset();
+                },
+            }));
+
+            useEffect(() => {
+                if (!mountRef.current) return;
+                const currentMount = mountRef.current;
+
+                // Scene Setup
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color('#111827');
+                scene.fog = new THREE.FogExp2('#111827', 0.02);
+                sceneElements.current.scene = scene;
+
+                // Camera Setup
+                const camera = new THREE.PerspectiveCamera(60, currentMount.clientWidth / currentMount.clientHeight, 0.1, 1000);
+                camera.position.set(0, 10, 40);
+                sceneElements.current.camera = camera;
+
+                // Renderer Setup
+                const renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
+                renderer.setPixelRatio(window.devicePixelRatio);
+                currentMount.appendChild(renderer.domElement);
+                sceneElements.current.renderer = renderer;
+
+                // OrbitControls
+                const controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.autoRotate = true;
+                controls.autoRotateSpeed = 0.5;
+                sceneElements.current.controls = controls;
+
+                // Lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                scene.add(ambientLight);
+                const dirLight = new THREE.DirectionalLight(0x00ff00, 0.8);
+                dirLight.position.set(10, 20, 10);
+                scene.add(dirLight);
+
+                // Grid Helper
+                const grid = new THREE.GridHelper(50, 50, 0x00ff00, 0x1f2937);
+                scene.add(grid);
+                sceneElements.current.grid = grid;
+
+                // Matrix Code Effect (Digital Rain)
+                const createCharTexture = (char) => {
+                    const size = 64;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = size;
+                    canvas.height = size;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = "rgba(0,0,0,0)";
+                    ctx.fillRect(0, 0, size, size);
+                    ctx.shadowBlur = 6;
+                    ctx.shadowColor = "#00ff00";
+                    ctx.font = "bold 40px 'Courier New', monospace";
+                    ctx.fillStyle = "#00ff00";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(char, size / 2, size / 2);
+                    return new THREE.CanvasTexture(canvas);
+                };
+                
+                const chars = ['0', '1', 'ｸ', 'ﾗ', 'ｲ', 'ﾑ', 'A', 'Z', 'S', 'X', '*', '+', '-'];
+                const particleSystems = [];
+                
+                chars.forEach(char => {
+                    const count = 300;
+                    const geometry = new THREE.BufferGeometry();
+                    const positions = [];
+                    const velocities = [];
+
+                    for (let i = 0; i < count; i++) {
+                        const x = (Math.random() - 0.5) * 60;
+                        const y = (Math.random() - 0.5) * 60;
+                        const z = (Math.random() - 0.5) * 60;
+                        positions.push(x, y, z);
+                        velocities.push(0.1 + Math.random() * 0.3);
+                    }
+                    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                    geometry.userData = { velocities };
+
+                    const material = new THREE.PointsMaterial({
+                        size: 1.5,
+                        map: createCharTexture(char),
+                        transparent: true,
+                        opacity: 0.9,
+                        alphaTest: 0.1,
+                        blending: THREE.AdditiveBlending,
+                        depthWrite: false
+                    });
+
+                    const points = new THREE.Points(geometry, material);
+                    scene.add(points);
+                    particleSystems.push(points);
+                });
+
+                // Animation Loop
+                const animate = () => {
+                    sceneElements.current.animationFrameId = requestAnimationFrame(animate);
+                    controls.update();
+                    particleSystems.forEach(system => {
+                        const positions = system.geometry.attributes.position.array;
+                        const velocities = system.geometry.userData.velocities;
+                        for (let i = 0; i < velocities.length; i++) {
+                            const yIdx = i * 3 + 1;
+                            positions[yIdx] -= velocities[i];
+                            if (positions[yIdx] < -25) {
+                                positions[yIdx] = 25;
+                            }
+                        }
+                        system.geometry.attributes.position.needsUpdate = true;
+                    });
+                    renderer.render(scene, camera);
+                };
+                animate();
+
+                // Resize Handler
+                const handleResize = () => {
+                    if (!mountRef.current) return;
+                    const width = mountRef.current.clientWidth;
+                    const height = mountRef.current.clientHeight;
+                    renderer.setSize(width, height);
+                    camera.aspect = width / height;
+                    camera.updateProjectionMatrix();
+                };
+                window.addEventListener('resize', handleResize);
+
+                // Cleanup
+                return () => {
+                    if (sceneElements.current.animationFrameId) {
+                        cancelAnimationFrame(sceneElements.current.animationFrameId);
+                    }
+                    window.removeEventListener('resize', handleResize);
+                    if (currentMount && renderer.domElement && currentMount.contains(renderer.domElement)) {
+                        currentMount.removeChild(renderer.domElement);
+                    }
+                    particleSystems.forEach(system => {
+                        system.geometry.dispose();
+                        if (system.material.map) system.material.map.dispose();
+                        system.material.dispose();
+                        scene.remove(system);
+                    });
+                    grid.geometry.dispose();
+                    grid.material.dispose();
+                    scene.remove(grid);
+                    renderer.dispose();
+                };
+            }, []);
+
+            useEffect(() => {
+                if (sceneElements.current.grid) {
+                    sceneElements.current.grid.visible = isGridVisible;
+                }
+            }, [isGridVisible]);
+
+            // Equivalent of: <div ref={mountRef} className="w-full h-full" />
+            return React.createElement('div', { ref: mountRef, className: 'w-full h-full' });
+        });
+
+        // ----------------------------------------
+        // 2. Main App Component (from App.tsx)
+        // ----------------------------------------
+        const App = () => {
+            const [isGridVisible, setIsGridVisible] = useState(true);
+            const threeSceneRef = useRef(null);
+
+            const handleResetCamera = () => {
+                threeSceneRef.current?.resetCamera();
+            };
+
+            const handleToggleGrid = () => {
+                setIsGridVisible(prev => !prev);
+            };
+            
+            // This is the JSX from App.tsx converted to React.createElement calls
+            return React.createElement(
+                'div',
+                { className: 'relative w-screen h-screen bg-gray-900' },
+                React.createElement(ThreeScene, { ref: threeSceneRef, isGridVisible: isGridVisible }),
+                React.createElement(
+                    'div',
+                    { className: 'absolute top-4 left-4 z-10 p-4 bg-gray-900 bg-opacity-70 rounded-lg shadow-lg backdrop-blur-sm border border-green-500/20' },
+                    React.createElement('h1', { className: 'text-xl font-bold text-green-400 font-mono mb-4 tracking-wider' }, 'MTRX_CTRL'),
+                    React.createElement(
+                        'div',
+                        { className: 'flex flex-col space-y-2' },
+                        React.createElement(
+                            'button',
+                            {
+                                onClick: handleResetCamera,
+                                className: 'px-4 py-2 bg-green-500 text-gray-900 font-bold font-mono rounded-md hover:bg-green-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-75 transition-colors duration-200'
+                            },
+                            'RESET_CAMERA'
+                        ),
+                        React.createElement(
+                            'button',
+                            {
+                                onClick: handleToggleGrid,
+                                className: 'px-4 py-2 bg-gray-700 text-white font-bold font-mono rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75 transition-colors duration-200'
+                            },
+                            `GRID: ${isGridVisible ? 'ON' : 'OFF'}`
+                        )
+                    )
+                )
+            );
+        };
+        
+        // ----------------------------------------
+        // 3. Mount the App (from index.tsx)
+        // ----------------------------------------
+        const rootElement = document.getElementById('root');
+        if (!rootElement) {
+          throw new Error("Could not find root element to mount to");
+        }
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(React.createElement(App));
+
+    </script>
+</body>
+</html>
